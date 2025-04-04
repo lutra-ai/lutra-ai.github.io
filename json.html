@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Editor & Validator</title>
+    <style>
+        :root {
+            --primary: #6366F1;
+            --primary-light: #A5B4FC;
+            --dark: #1F2937;
+            --gray: #4B5563;
+            --light: #F9FAFB;
+            --error: #EF4444;
+            --success: #10B981;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        body {
+            background-color: var(--light);
+            color: var(--dark);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            flex: 1;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        
+        .logo {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo-link {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: #008F99;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .logo-text {
+            font-weight: 600;
+            font-size: 18px;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+        
+        .logo-link:hover .logo-text,
+        .logo-link:hover .tooltip svg {
+            opacity: 1;
+        }
+        
+        .logo img {
+            height: 40px;
+        }
+        
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            height: calc(100vh - 150px);
+        }
+        
+        @media (max-width: 768px) {
+            .editor-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+        
+        .editor-box {
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+        
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background-color: var(--dark);
+            color: white;
+        }
+        
+        .editor-title {
+            font-weight: 600;
+        }
+        
+        .textarea-container {
+            position: relative;
+            flex: 1;
+            overflow: visible !important;
+        }
+        
+        textarea, pre.output {
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 1rem;
+            resize: none;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--dark);
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            overflow: auto;
+        }
+        
+        textarea {
+            position: relative;
+            z-index: 1;
+            background-color: rgba(255, 255, 255, 0.9) !important;
+        }
+        
+        pre.output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+        }
+        
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            padding: 1rem 0.5rem;
+            background: #f5f5f5;
+            color: var(--gray);
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            text-align: right;
+            user-select: none;
+            overflow: hidden;
+        }
+        
+        .actions {
+            display: none;
+        }
+        
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-1px);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        button.secondary {
+            background-color: white;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+        
+        button.secondary:hover {
+            background-color: rgba(99, 102, 241, 0.05);
+        }
+        
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .status.error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            display: block;
+        }
+        
+        .status.success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            display: block;
+        }
+        
+        .badge {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: var(--error);
+            color: white;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0 0 0 6px;
+            z-index: 10;
+            display: none;
+        }
+        
+        .copy-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 1;
+            transition: background-color 0.2s;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .copy-btn:hover {
+            background: var(--primary-light);
+        }
+        
+        .spinner {
+            display: none;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Dark mode toggle */
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--gray);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+        }
+        
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--dark);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s;
+        }
+        
+        .tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* New styles for the notification box */
+        .notification {
+            background-color: rgba(99, 102, 241, 0.1);
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+            color: var(--dark);
+        }
+        
+        /* Example label styling */
+        .example-label {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background-color: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            opacity: 0.8;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Hide the input copy button */
+        #copy-input {
+            display: none;
+        }
+        
+        /* Update the error highlight styles for better visibility */
+        .error-highlight {
+            background-color: rgba(239, 68, 68, 0.5);
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+            border-radius: 2px;
+            min-width: 8px;
+            animation: pulse 1.5s infinite;
+            box-shadow: 0 0 3px rgba(239, 68, 68, 0.8);
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+        
+        /* Update the error indicator for better visibility */
+        .error-indicator {
+            background-color: var(--error);
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.3rem;
+            border-radius: 2px;
+            position: absolute;
+            z-index: 6;
+            pointer-events: none;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>JSON Editor & Validator</h1>
+        </header>
+        
+        <!-- Add notification box -->
+        <div class="notification">
+            <p><strong>Privacy Notice:</strong> This tool validates and formats JSON entirely in your browser. No data is stored or sent to any server.</p>
+            <p>Perfect for cleaning up JSON configuration files, API responses, or any JSON data you're working with.</p>
+        </div>
+        
+        <div class="editor-container">
+            <div class="editor-box">
+                <div class="editor-header">
+                    <div class="editor-title">Input JSON</div>
+                </div>
+                <div class="textarea-container">
+                    <textarea id="input-json" placeholder="Paste your JSON here..."></textarea>
+                    <div class="example-label" id="example-label">Example JSON</div>
+                    <button class="copy-btn" id="copy-input">Copy</button>
+                </div>
+            </div>
+            
+            <div class="editor-box">
+                <div class="editor-header">
+                    <div class="editor-title">Formatted JSON</div>
+                </div>
+                <div class="textarea-container">
+                    <pre class="output" id="output-json"></pre>
+                    <button class="copy-btn" id="copy-output">Copy</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status" id="status"></div>
+    </div>
+    <div class="logo" style="width: 100px;">
+        <a href="https://lutra.ai" target="_blank" class="logo-link">
+            <div class="tooltip" data-tooltip="Powered by Lutra AI">
+                <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 380 100"
+                xmlns="http://www.w3.org/2000/svg"
+              >      
+                <g transform="scale(0.222 0.222) translate(0 25) ">
+                    <g clip-path="url(#cp0)">
+                        <path transform="matrix(1,0,0,-1,-799.5515,799.7704)" d="M 1143.873 739.5738 C 1222.06 661.3869 1222.06 534.6208 1143.873 456.4338 C 1065.686 378.2468 938.9202 378.2468 860.7332 456.4338 C 782.5463 534.6208 782.5463 661.3869 860.7332 739.5738 C 938.9202 817.7608 1065.686 817.7608 1143.873 739.5738 Z M 1143.873 739.5738 " fill="#f5f5f5"></path>
+                        <path transform="matrix(1,0,0,-1,-799.5515,799.7704)" d="M 1138.365 734.0659 C 1213.51 658.9209 1213.51 537.0868 1138.365 461.9418 C 1063.22 386.7968 941.3862 386.7968 866.2412 461.9418 C 791.0962 537.0868 791.0962 658.9209 866.2412 734.0659 C 941.3862 809.2108 1063.22 809.2108 1138.365 734.0659 Z M 1138.365 734.0659 " fill="#0e9c9e"></path>
+                        <path transform="matrix(1,0,0,1,8.151611,112.09296)" stroke-width="16" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" stroke="#f5f5f5" d="M 0 67.24564 C 31.40207 64.21978 62.27171 58.20884 92.22611 49.37888 C 119.9159 41.21648 146.9504 30.58912 174.2063 20.15827 C 201.7357 9.622724 229.9151 -.811607 259.4377 .04992018 C 285.9734 .8242848 311.091 10.65947 334.4189 23.27628 C 353.4124 33.54881 371.3474 45.66773 387.9643 59.45743 "></path>
+                        <path transform="matrix(1,0,0,1,7.388977,168.5332)" stroke-width="16" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" stroke="#f5f5f5" d="M 0 59.64357 C 31.33419 60.4869 62.48139 56.81702 92.52142 48.85603 C 120.4661 41.45035 147.3601 30.33318 174.5016 19.63542 C 187.2736 14.60137 200.2026 9.637031 213.3768 5.959428 C 226.5511 2.281824 239.9706 -.1090468 253.7237 .003829111 C 282.4691 .239753 309.5259 11.33877 335.708 23.08323 C 353.6984 31.15316 371.5284 39.57598 389.1877 48.34683 "></path>
+                        <path transform="matrix(1,0,0,1,19.4234,227.29419)" stroke-width="16" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" stroke="#f5f5f5" d="M 0 48.95043 C 28.529 49.68102 57.00748 47.70086 85.22832 43.09227 C 106.5603 39.60867 127.8049 34.63489 148.7117 28.3661 C 171.0198 21.67711 192.9228 13.51786 215.2737 7.413995 C 230.8257 3.166872 246.6442 -.07863651 262.739 .001450578 C 283.1767 .103148 303.2442 5.607154 322.3199 13.52234 C 337.6708 19.892 352.3306 27.84529 366.7061 36.31852 "></path>
+                        <path transform="matrix(1,0,0,1,49.820375,294.7453)" stroke-width="16" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" stroke="#f5f5f5" d="M 0 30.20466 C 35.27318 31.47472 70.51367 27.35519 104.5405 18.06365 C 128.8287 11.43138 153.2325 2.351686 178.2975 .4154354 C 222.4322 -2.993933 264.1154 15.20327 304.7893 32.21896 "></path>
+                        <path transform="matrix(1,0,0,1,125.25787,358.2717)" stroke-width="16" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" stroke="#f5f5f5" d="M 0 24.93649 C 27.87837 10.10079 58.70996 1.678985 90.25592 .2113248 C 117.2883 -1.046346 145.6482 3.066107 168.5155 19.13971 "></path>
+                    </g>
+                </g>
+                <g transform="translate(128 16) ">
+                    <g
+                      id="svgGroup"
+                      strokeLinecap="round"
+                      fillRule="evenodd"
+                      fontSize="9pt"
+                      stroke="#000"
+                      strokeWidth="0"
+                      fill="#008E97"
+                      style="stroke: #000; stroke-width: 0; fill: #008E97"
+                    >
+                      <path
+                        d="M 60.5 49 L 60.5 31 Q 60.5 26.478 59.399 24.04 A 6.95 6.95 0 0 0 59.1 23.45 A 4.401 4.401 0 0 0 56.777 21.521 Q 55.436 21 53.5 21 L 52.5 21 L 52.5 19 L 60.5 19 A 23.19 23.19 0 0 1 62.435 19.075 Q 64.37 19.238 65.621 19.753 A 5.643 5.643 0 0 1 66.05 19.95 Q 67.855 20.877 68.661 23.28 A 9.208 9.208 0 0 1 68.7 23.4 A 12.52 12.52 0 0 1 69.087 25.012 Q 69.5 27.334 69.5 31 L 69.5 49 A 24.767 24.767 0 0 0 69.749 52.641 Q 70.033 54.544 70.639 56.063 A 9.661 9.661 0 0 0 72.65 59.25 A 10.441 10.441 0 0 0 80.208 62.497 A 13.387 13.387 0 0 0 80.5 62.5 Q 85.8 62.5 90.5 57.2 L 90.5 19 L 99.5 19 L 99.5 66 L 94.5 66 L 91 62 L 90.5 62 A 15.082 15.082 0 0 1 87.829 64.103 A 20.739 20.739 0 0 1 85.05 65.55 A 17.554 17.554 0 0 1 80.165 66.844 A 22.115 22.115 0 0 1 77.5 67 A 22.99 22.99 0 0 1 72.06 66.39 A 16.431 16.431 0 0 1 65.25 63 A 11.568 11.568 0 0 1 62.045 58.455 Q 60.523 54.76 60.5 49.172 A 41.777 41.777 0 0 1 60.5 49 Z M 9 66 L 9 12 Q 9 7.478 7.899 5.04 A 6.95 6.95 0 0 0 7.6 4.45 A 4.401 4.401 0 0 0 5.277 2.521 Q 3.936 2 2 2 L 0 2 L 0 0 L 9 0 A 23.19 23.19 0 0 1 10.935 0.075 Q 12.87 0.238 14.121 0.753 A 5.643 5.643 0 0 1 14.55 0.95 Q 16.355 1.877 17.161 4.28 A 9.208 9.208 0 0 1 17.2 4.4 A 12.52 12.52 0 0 1 17.587 6.012 Q 18 8.334 18 12 L 18 62 L 53.5 62 L 53.5 66 L 9 66 Z M 209.6 39 L 212.6 39 Q 212.6 29.2 209.9 25.6 A 8.78 8.78 0 0 0 203.636 22.088 A 12.984 12.984 0 0 0 202.1 22 Q 198.707 22 196.338 23.08 A 8.917 8.917 0 0 0 194.9 23.9 A 7.804 7.804 0 0 0 192.782 26.197 Q 191.702 27.93 191.1 30.5 L 186.6 30.5 A 46.972 46.972 0 0 1 186.639 28.517 Q 186.716 26.704 186.944 25.441 A 12.471 12.471 0 0 1 187 25.15 Q 187.4 23.2 189.1 21.5 A 7.066 7.066 0 0 1 190.697 20.329 Q 192.282 19.455 194.711 18.922 A 24.815 24.815 0 0 1 195.05 18.85 A 41.509 41.509 0 0 1 200.458 18.125 A 51.769 51.769 0 0 1 204.1 18 A 24.387 24.387 0 0 1 209.375 18.538 Q 212.995 19.34 215.681 21.337 A 14.784 14.784 0 0 1 216.9 22.35 A 11.54 11.54 0 0 1 219.576 26.28 Q 221.6 30.928 221.6 39 L 221.6 66 L 216.6 66 L 213.1 61.5 L 212.6 61.5 A 11.243 11.243 0 0 1 210.457 63.564 Q 209.401 64.354 208.068 65.03 A 20.867 20.867 0 0 1 207.3 65.4 A 16.332 16.332 0 0 1 203.779 66.522 Q 202.101 66.866 200.159 66.962 A 31.342 31.342 0 0 1 198.6 67 A 16.377 16.377 0 0 1 193.744 66.241 A 19.743 19.743 0 0 1 192.1 65.65 A 13.127 13.127 0 0 1 187.13 62.037 A 15.981 15.981 0 0 1 186.45 61.2 Q 184.1 58.1 184.1 53 A 12.63 12.63 0 0 1 184.932 48.298 Q 186.522 44.301 191.15 42.2 A 31.629 31.629 0 0 1 197.459 40.158 Q 200.596 39.471 204.288 39.191 A 70.507 70.507 0 0 1 209.6 39 Z M 115.8 54 L 115.8 23 L 108.8 23 L 108.8 19 L 115.8 19 L 115.8 10 L 120.8 4 L 124.8 4 L 124.8 19 L 136.8 19 L 136.8 23 L 124.8 23 L 124.8 54 A 16.972 16.972 0 0 0 125.089 57.285 Q 126.12 62.485 130.831 62.954 A 9.794 9.794 0 0 0 131.8 63 A 19.264 19.264 0 0 0 133.495 62.93 Q 134.819 62.813 135.85 62.5 A 15.804 15.804 0 0 0 137.754 61.779 A 20.667 20.667 0 0 0 139.3 61 L 140.3 63 A 23.589 23.589 0 0 1 135.375 65.778 A 26.119 26.119 0 0 1 135.2 65.85 A 13.271 13.271 0 0 1 132.847 66.551 Q 131.626 66.803 130.184 66.914 A 31.247 31.247 0 0 1 127.8 67 A 15.805 15.805 0 0 1 124.159 66.605 A 10.564 10.564 0 0 1 119 63.8 Q 116.464 61.264 115.938 56.593 A 23.188 23.188 0 0 1 115.8 54 Z M 148.5 66 L 148.5 31 Q 148.5 26.478 147.399 24.04 A 6.95 6.95 0 0 0 147.1 23.45 A 4.401 4.401 0 0 0 144.777 21.521 Q 143.436 21 141.5 21 L 140.5 21 L 140.5 19 L 148.5 19 A 22.274 22.274 0 0 1 150.491 19.083 Q 152.572 19.27 153.908 19.88 A 5.816 5.816 0 0 1 154.25 20.05 Q 156.2 21.1 157 23.5 L 157.5 23.5 A 13.405 13.405 0 0 1 160.238 20.899 A 17.481 17.481 0 0 1 162.35 19.6 Q 165.4 18 169.5 18 A 17.219 17.219 0 0 1 171.592 18.119 Q 173.976 18.411 175.398 19.425 A 5.266 5.266 0 0 1 175.5 19.5 Q 177.2 20.8 179 24 L 175 27 A 5.946 5.946 0 0 0 173.18 25.386 A 8.143 8.143 0 0 0 171.8 24.75 A 12.551 12.551 0 0 0 169.248 24.144 A 16.853 16.853 0 0 0 167 24 Q 164 24 161.5 25.35 Q 159 26.7 157.5 29 L 157.5 66 L 148.5 66 Z M 212.6 56.5 L 212.6 43 L 209.6 43 Q 202.2 43 197.9 45.75 A 10.811 10.811 0 0 0 195.541 47.743 A 7.758 7.758 0 0 0 193.6 53 A 12.283 12.283 0 0 0 193.91 55.848 Q 194.454 58.131 195.952 59.669 A 7.766 7.766 0 0 0 196.35 60.05 A 9.615 9.615 0 0 0 202.346 62.478 A 12.503 12.503 0 0 0 203.1 62.5 A 11.241 11.241 0 0 0 205.6 62.236 A 8.095 8.095 0 0 0 208.6 60.9 A 14.061 14.061 0 0 0 210.887 58.791 A 19.197 19.197 0 0 0 212.6 56.5 Z"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </g>
+                  </g>
+                </svg>
+
+
+            </span>
+        </a>
+    </div>
+
+    <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM fully loaded");
+            
+            // Get DOM elements
+            const inputJson = document.getElementById('input-json');
+            const outputJson = document.getElementById('output-json');
+            const status = document.getElementById('status');
+            const copyOutput = document.getElementById('copy-output');
+            const exampleLabel = document.getElementById('example-label');
+            
+            // Debug element existence
+            console.log("Elements loaded:", {
+                inputJson: !!inputJson,
+                outputJson: !!outputJson,
+                status: !!status,
+                copyOutput: !!copyOutput,
+                exampleLabel: !!exampleLabel
+            });
+            
+            // New example JSON to load by default
+            const sampleJson = `{
+  "mcpServers": {
+    "paypal-mcp-server": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.paypal.com/sse"
+      ]
+    },
+    "actors-mcp-server": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@apify/actors-mcp-server",
+        "--actors",
+        "clockworks/free-tiktok-scraper"
+      ],
+      "env": {
+        "APIFY_TOKEN": "<API_KEY_HERE>"
+      }
+    }
+  }
+}`;
+            
+            // Debounce function to limit how often a function can be called
+            function debounce(func, wait) {
+                let timeout;
+                return function(...args) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(this, args), wait);
+                };
+            }
+            
+            // Always load sample JSON on page load
+            inputJson.value = sampleJson;
+            validateJson(false);
+            
+            // Update output when input changes, without saving to localStorage
+            inputJson.addEventListener('input', function() {
+                // Hide the example label if the content is different from the sample
+                if (inputJson.value !== sampleJson) {
+                    exampleLabel.style.opacity = '0';
+                } else {
+                    exampleLabel.style.opacity = '0.8';
+                }
+                
+                debouncedValidateJson();
+            });
+            
+            // Attempt to fix JSON and display it, even if not fully valid
+            function tryToFixAndDisplayJson(jsonText) {
+                try {
+                    // Try to fix common JSON errors before parsing
+                    if (!jsonText.trim()) {
+                        outputJson.textContent = '';
+                        return;
+                    }
+                    
+                    // Make a copy of the original text for comparison
+                    let originalText = jsonText;
+                    
+                    // Pre-processing to handle extra/missing delimiters
+                    jsonText = preProcessJson(jsonText);
+                    
+                    // Fix missing quotes around property names
+                    jsonText = jsonText.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":');
+                    
+                    // Fix single quotes to double quotes
+                    jsonText = jsonText.replace(/'/g, '"');
+                    
+                    // Fix trailing commas in objects and arrays
+                    jsonText = jsonText.replace(/,\s*([\]}])/g, '$1');
+                    
+                    // Add missing quotes to values that look like they should be strings
+                    // More aggressive replacement for unquoted values
+                    jsonText = jsonText.replace(/:\s*([a-zA-Z][a-zA-Z0-9_]*)/g, ':"$1"');
+                    
+                    // Fix unquoted values following a comma (for arrays of identifiers)
+                    jsonText = jsonText.replace(/,\s*([a-zA-Z][a-zA-Z0-9_]*)/g, ',"$1"');
+                    
+                    try {
+                        // Try to parse with fixes
+                        const parsedJson = JSON.parse(jsonText);
+                        outputJson.textContent = JSON.stringify(parsedJson, null, 2);
+                        status.className = 'status';
+                        status.textContent = '';
+                    } catch (error) {
+                        // More aggressive recovery
+                        console.log("First level fixes failed, trying deeper recovery:", error.message);
+                        
+                        // Try to extract valid portions based on the structure
+                        if (jsonText.trim().startsWith('{')) {
+                            let result = extractValidObject(jsonText);
+                            outputJson.textContent = result;
+                        } else if (jsonText.trim().startsWith('[')) {
+                            let result = extractValidArray(jsonText);
+                            outputJson.textContent = result;
+                        } else {
+                            // For primitive values or unknown structures
+                            outputJson.textContent = "{}";
+                        }
+                    }
+                } catch (error) {
+                    console.error("Recovery failed:", error);
+                    // Fallback to empty object if all else fails
+                    outputJson.textContent = '{}';
+                }
+            }
+            
+            // New function to preprocess JSON and fix common structural issues
+            function preProcessJson(jsonText) {
+                // Make a copy to work with
+                let text = jsonText.trim();
+                
+                // Check for balanced braces and brackets
+                let braceCount = 0;
+                let bracketCount = 0;
+                let lastChar = '';
+                let inString = false;
+                let escapeNext = false;
+                let result = '';
+                let expectingComma = false;
+                
+                // First pass - insert missing commas and remove extra ones
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    
+                    // Handle escape sequences in strings
+                    if (escapeNext) {
+                        escapeNext = false;
+                        result += char;
+                        continue;
+                    }
+                    
+                    if (char === '\\' && inString) {
+                        escapeNext = true;
+                        result += char;
+                        continue;
+                    }
+                    
+                    // Handle strings
+                    if (char === '"' && !escapeNext) {
+                        inString = !inString;
+                        result += char;
+                        continue;
+                    }
+                    
+                    if (!inString) {
+                        // Handle missing commas between object properties
+                        if (char === '"' && lastChar === '}') {
+                            result += ',';
+                        }
+                        
+                        // Handle missing commas between array items
+                        if ((char === '{' || char === '[' || char === '"') && 
+                            (lastChar === '}' || lastChar === ']' || lastChar === '"') && 
+                            expectingComma) {
+                            result += ',';
+                        }
+                        
+                        // Keep track of brace/bracket balance
+                        if (char === '{') braceCount++;
+                        if (char === '}') braceCount--;
+                        if (char === '[') bracketCount++;
+                        if (char === ']') bracketCount--;
+                        
+                        // Set expectingComma flag after values end
+                        if (char === '}' || char === ']' || char === '"' || 
+                            /[0-9]/.test(char) || /[true|false|null]/.test(text.substring(i-3, i+1))) {
+                            expectingComma = true;
+                        } else if (char === ',' || char === '{' || char === '[' || char === ':') {
+                            expectingComma = false;
+                        }
+                        
+                        // Fix missing colon after property name
+                        if (char === '"' && !inString) {
+                            // Look ahead for missing colon
+                            let j = i + 1;
+                            while (j < text.length && /\s/.test(text[j])) j++; // Skip whitespace
+                            
+                            if (j < text.length && text[j] !== ':' && 
+                                (text[j] === '{' || text[j] === '[' || char === '"') && 
+                                /[0-9tfn]/.test(text[j])) {
+                                result += char + ':';
+                                continue;
+                            }
+                        }
+                    }
+                    
+                    // Add the character to the result
+                    result += char;
+                    lastChar = char;
+                }
+                
+                // Second pass - fix unbalanced braces/brackets
+                let fixedText = result;
+                let openBraces = (fixedText.match(/{/g) || []).length;
+                let closeBraces = (fixedText.match(/}/g) || []).length;
+                let openBrackets = (fixedText.match(/\[/g) || []).length;
+                let closeBrackets = (fixedText.match(/\]/g) || []).length;
+                
+                // Add missing closing braces/brackets
+                while (openBraces > closeBraces) {
+                    fixedText += '}';
+                    closeBraces++;
+                }
+                
+                while (openBrackets > closeBrackets) {
+                    fixedText += ']';
+                    closeBrackets++;
+                }
+                
+                // Remove extra closing braces/brackets (by trimming from the end)
+                while (closeBraces > openBraces) {
+                    let lastCloseBrace = fixedText.lastIndexOf('}');
+                    if (lastCloseBrace !== -1) {
+                        fixedText = fixedText.substring(0, lastCloseBrace) + 
+                                  fixedText.substring(lastCloseBrace + 1);
+                        closeBraces--;
+                    } else {
+                        break;
+                    }
+                }
+                
+                while (closeBrackets > openBrackets) {
+                    let lastCloseBracket = fixedText.lastIndexOf(']');
+                    if (lastCloseBracket !== -1) {
+                        fixedText = fixedText.substring(0, lastCloseBracket) + 
+                                  fixedText.substring(lastCloseBracket + 1);
+                        closeBrackets--;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Ensure the JSON starts with a valid structure
+                if (!fixedText.startsWith('{') && !fixedText.startsWith('[')) {
+                    if (fixedText.includes(':')) {
+                        fixedText = '{' + fixedText + '}';
+                    } else {
+                        fixedText = '[' + fixedText + ']';
+                    }
+                }
+                
+                return fixedText;
+            }
+            
+            // Extract valid object from malformed JSON
+            function extractValidObject(jsonText) {
+                try {
+                    // Start with empty object
+                    let result = {};
+                    
+                    // Pre-process the JSON to fix structural issues
+                    jsonText = preProcessJson(jsonText);
+                    
+                    // Remove outer braces and split by commas
+                    let content = jsonText.trim();
+                    if (content.startsWith('{')) content = content.substring(1);
+                    if (content.endsWith('}')) content = content.substring(0, content.length - 1);
+                    
+                    // Split by commas not inside quotes or braces/brackets
+                    let keyValuePairs = [];
+                    let currentPair = '';
+                    let braceCount = 0;
+                    let bracketCount = 0;
+                    let inQuote = false;
+                    let escapeNext = false;
+                    
+                    for (let i = 0; i < content.length; i++) {
+                        const char = content[i];
+                        
+                        if (escapeNext) {
+                            escapeNext = false;
+                            currentPair += char;
+                            continue;
+                        }
+                        
+                        if (char === '\\') {
+                            escapeNext = true;
+                            currentPair += char;
+                            continue;
+                        }
+                        
+                        if (char === '"' && !escapeNext) {
+                            inQuote = !inQuote;
+                            currentPair += char;
+                            continue;
+                        }
+                        
+                        if (!inQuote) {
+                            if (char === '{') braceCount++;
+                            if (char === '}') braceCount--;
+                            if (char === '[') bracketCount++;
+                            if (char === ']') bracketCount--;
+                            
+                            if (char === ',' && braceCount === 0 && bracketCount === 0) {
+                                keyValuePairs.push(currentPair.trim());
+                                currentPair = '';
+                                continue;
+                            }
+                        }
+                        
+                        currentPair += char;
+                    }
+                    
+                    if (currentPair.trim()) {
+                        keyValuePairs.push(currentPair.trim());
+                    }
+                    
+                    // Try to handle missing colons
+                    keyValuePairs = keyValuePairs.map(pair => {
+                        if (!pair.includes(':')) {
+                            // Find first space after a likely key
+                            let spaceIndex = pair.search(/"\s+/);
+                            if (spaceIndex > 0) {
+                                return pair.substring(0, spaceIndex + 1) + ':' + pair.substring(spaceIndex + 1);
+                            }
+                        }
+                        return pair;
+                    });
+                    
+                    // Process each key-value pair
+                    for (let pair of keyValuePairs) {
+                        let colonIndex = pair.indexOf(':');
+                        
+                        // Skip if no colon found
+                        if (colonIndex <= 0) {
+                            console.log("Skipping invalid pair with no colon:", pair);
+                            continue;
+                        }
+                        
+                        let key = pair.substring(0, colonIndex).trim();
+                        let value = pair.substring(colonIndex + 1).trim();
+                        
+                        // Fix key if needed
+                        if (!key.startsWith('"') && !key.startsWith("'")) {
+                            key = `"${key}"`;
+                        }
+                        if (key.startsWith("'")) {
+                            key = `"${key.substring(1, key.length - 1)}"`;
+                        }
+                        
+                        try {
+                            // Try to parse this key-value pair
+                            let testObj = JSON.parse(`{${key}:${value}}`);
+                            // If successful, add to result
+                            Object.assign(result, testObj);
+                        } catch (e) {
+                            console.log("Simple parsing failed, trying enhanced recovery for:", pair, e.message);
+                            
+                            // More aggressive recovery for values that are unquoted identifiers
+                            try {
+                                // If the value is just an identifier (like fsdf: fsd), quote it
+                                if (/^[a-zA-Z][a-zA-Z0-9_]*$/.test(value.trim())) {
+                                    let testObj = JSON.parse(`{${key}:"${value.trim()}"}`);
+                                    Object.assign(result, testObj);
+                                    continue;
+                                }
+                                
+                                // Try to recover the value if it's an object or array
+                                if (value.trim().startsWith('{')) {
+                                    // It's an object, try to extract valid parts
+                                    let parsedValue = JSON.parse(extractValidObject(value));
+                                    let keyStr = JSON.parse(key);
+                                    result[keyStr] = parsedValue;
+                                } else if (value.trim().startsWith('[')) {
+                                    // It's an array, try to extract valid parts
+                                    let parsedValue = JSON.parse(extractValidArray(value));
+                                    let keyStr = JSON.parse(key);
+                                    result[keyStr] = parsedValue;
+                                } else {
+                                    // For any other unrecognized value format, try to make a best guess
+                                    // This handles cases like fsdf: fsd where both are unquoted
+                                    let keyStr = JSON.parse(key);
+                                    
+                                    // Try to determine the type and convert accordingly
+                                    if (value === "true") result[keyStr] = true;
+                                    else if (value === "false") result[keyStr] = false;
+                                    else if (value === "null") result[keyStr] = null;
+                                    else if (!isNaN(Number(value))) result[keyStr] = Number(value);
+                                    else result[keyStr] = value.trim(); // Store as string even if invalid
+                                }
+                            } catch (e2) {
+                                console.log("Enhanced recovery failed:", e2.message);
+                                // If all else fails, just store it as an empty string
+                                try {
+                                    let keyStr = JSON.parse(key);
+                                    result[keyStr] = "";
+                                } catch (e3) {
+                                    // Even the key is completely invalid, so skip this pair
+                                }
+                            }
+                        }
+                    }
+                    
+                    return JSON.stringify(result, null, 2);
+                } catch (error) {
+                    console.error("Object extraction failed:", error);
+                    return "{}";
+                }
+            }
+            
+            // Extract valid array from malformed JSON
+            function extractValidArray(jsonText) {
+                try {
+                    let result = [];
+                    
+                    // Pre-process the JSON to fix structural issues
+                    jsonText = preProcessJson(jsonText);
+                    
+                    // Remove outer brackets and split by commas
+                    let content = jsonText.trim();
+                    if (content.startsWith('[')) content = content.substring(1);
+                    if (content.endsWith(']')) content = content.substring(0, content.length - 1);
+                    
+                    // Split by commas not inside quotes or braces/brackets
+                    let items = [];
+                    let currentItem = '';
+                    let braceCount = 0;
+                    let bracketCount = 0;
+                    let inQuote = false;
+                    let escapeNext = false;
+                    
+                    // Also handle case where commas are missing
+                    for (let i = 0; i < content.length; i++) {
+                        const char = content[i];
+                        
+                        if (escapeNext) {
+                            escapeNext = false;
+                            currentItem += char;
+                            continue;
+                        }
+                        
+                        if (char === '\\') {
+                            escapeNext = true;
+                            currentItem += char;
+                            continue;
+                        }
+                        
+                        if (char === '"' && !escapeNext) {
+                            inQuote = !inQuote;
+                            currentItem += char;
+                            continue;
+                        }
+                        
+                        if (!inQuote) {
+                            if (char === '{') braceCount++;
+                            if (char === '}') braceCount--;
+                            if (char === '[') bracketCount++;
+                            if (char === ']') bracketCount--;
+                            
+                            // Check for comma or other item boundary
+                            if ((char === ',' || 
+                                (currentItem.trim() && 
+                                 (char === '{' || char === '[' || char === '"') && 
+                                 braceCount === 0 && bracketCount === 0)) && 
+                                currentItem.trim()) {
+                                
+                                if (char === ',') {
+                                    items.push(currentItem.trim());
+                                    currentItem = '';
+                                    continue;
+                                } else {
+                                    // Missing comma between items
+                                    items.push(currentItem.trim());
+                                    currentItem = char;
+                                    continue;
+                                }
+                            }
+                        }
+                        
+                        currentItem += char;
+                    }
+                    
+                    if (currentItem.trim()) {
+                        items.push(currentItem.trim());
+                    }
+                    
+                    // Process each item
+                    for (let item of items) {
+                        try {
+                            // Try to parse this item
+                            let value = JSON.parse(item);
+                            result.push(value);
+                        } catch (e) {
+                            // Try to fix common issues
+                            try {
+                                // Is it a string missing quotes?
+                                if (!item.startsWith('"') && !item.startsWith("'") && 
+                                    isNaN(Number(item)) && item !== 'true' && item !== 'false' && item !== 'null') {
+                                    result.push(item);
+                                }
+                                // Is it an object?
+                                else if (item.startsWith('{')) {
+                                    let obj = JSON.parse(extractValidObject(item));
+                                    result.push(obj);
+                                }
+                                // Is it an array?
+                                else if (item.startsWith('[')) {
+                                    let arr = JSON.parse(extractValidArray(item));
+                                    result.push(arr);
+                                } else {
+                                    // Try to auto-detect the type
+                                    if (item === "true") result.push(true);
+                                    else if (item === "false") result.push(false);
+                                    else if (item === "null") result.push(null);
+                                    else if (!isNaN(Number(item))) result.push(Number(item));
+                                    else result.push(item); // Store as string
+                                }
+                            } catch (e2) {
+                                console.log("Skipping invalid array item:", item);
+                            }
+                        }
+                    }
+                    
+                    return JSON.stringify(result, null, 2);
+                } catch (error) {
+                    console.error("Array extraction failed:", error);
+                    return "[]";
+                }
+            }
+            
+            // Simplified error highlighting function that works more consistently
+            function highlightError(error) {
+                // Clear any existing highlights
+                clearErrorHighlights();
+                
+                // Only try to highlight if we have an error message
+                if (!error || !error.message) return;
+                
+                console.log("Highlighting error:", error.message);
+                
+                try {
+                    // Parse the error message to get position info
+                    const posMatch = error.message.match(/position\s+(\d+)/i) || 
+                                     error.message.match(/at\s+position\s+(\d+)/i) || 
+                                     error.message.match(/character\s+(\d+)/i) ||
+                                     error.message.match(/column\s+(\d+)/i);
+                    
+                    const lineMatch = error.message.match(/line\s+(\d+)/i);
+                    let errorPos = posMatch ? parseInt(posMatch[1]) : null;
+                    let errorLine = lineMatch ? parseInt(lineMatch[1]) : null;
+                    
+                    // If we don't have a position but have a line number, estimate position
+                    if (errorPos === null && errorLine !== null) {
+                        const lines = inputJson.value.split('\n');
+                        errorPos = 0;
+                        for (let i = 0; i < errorLine - 1 && i < lines.length; i++) {
+                            errorPos += lines[i].length + 1; // +1 for the newline
+                        }
+                    }
+                    
+                    // If no position found, try to find the problematic token from the error message
+                    if (errorPos === null) {
+                        const tokenMatch = error.message.match(/'([^']+)'/);
+                        if (tokenMatch) {
+                            const token = tokenMatch[1];
+                            errorPos = inputJson.value.indexOf(token);
+                        }
+                    }
+                    
+                    // Direct approach - create a highlight at the position
+                    if (errorPos !== null) {
+                        console.log("Error position found:", errorPos);
+                        
+                        // Find the text before the error to count lines and chars
+                        const textBefore = inputJson.value.substring(0, errorPos);
+                        const lines = textBefore.split('\n');
+                        const lineNumber = lines.length;
+                        const charPosition = lines[lines.length-1].length;
+                        
+                        console.log(`Error at line ${lineNumber}, char ${charPosition}`);
+                        
+                        // Create highlight elements
+                        const container = inputJson.parentElement;
+                        
+                        // Create indicator element (visible marker)
+                        const indicator = document.createElement('div');
+                        indicator.className = 'error-indicator';
+                        indicator.textContent = '!';
+                        container.appendChild(indicator);
+                        
+                        // Create the highlight element
+                        const highlight = document.createElement('div');
+                        highlight.className = 'error-highlight';
+                        container.appendChild(highlight);
+                        
+                        // Position highlight and indicator - simplified approach
+                        const lineHeight = parseInt(getComputedStyle(inputJson).lineHeight);
+                        const padding = parseInt(getComputedStyle(inputJson).paddingTop);
+                        
+                        // Calculate positions
+                        const top = (lineNumber - 1) * lineHeight + padding;
+                        const left = 10 + charPosition * 8; // Approximate char width
+                        
+                        // Set positions
+                        highlight.style.top = `${top}px`;
+                        highlight.style.left = `${left}px`;
+                        highlight.style.height = `${lineHeight}px`;
+                        highlight.style.width = '10px';
+                        
+                        indicator.style.top = `${top - 5}px`;
+                        indicator.style.left = `${left - 16}px`;
+                        
+                        // Scroll to the error position
+                        inputJson.scrollTop = Math.max(0, top - inputJson.clientHeight / 2);
+                        
+                        console.log("Error highlight applied at:", { top, left });
+                    } else {
+                        console.log("Could not determine error position from message:", error.message);
+                    }
+                } catch (e) {
+                    console.error("Failed to highlight error:", e);
+                }
+            }
+            
+            // Function to clear error highlights
+            function clearErrorHighlights() {
+                const container = inputJson.parentElement;
+                const highlights = container.querySelectorAll('.error-highlight, .error-indicator');
+                highlights.forEach(el => el.remove());
+            }
+            
+            // Function to get coordinates of text at a specific position
+            function getTextCoordinates(textarea, position) {
+                // Create a hidden div with same styling as textarea
+                const mirror = document.createElement('div');
+                mirror.style.position = 'absolute';
+                mirror.style.top = '0';
+                mirror.style.left = '0';
+                mirror.style.visibility = 'hidden';
+                mirror.style.whiteSpace = 'pre-wrap';
+                mirror.style.wordWrap = 'break-word';
+                mirror.style.width = getComputedStyle(textarea).width;
+                mirror.style.padding = getComputedStyle(textarea).padding;
+                mirror.style.font = getComputedStyle(textarea).font;
+                mirror.style.lineHeight = getComputedStyle(textarea).lineHeight;
+                
+                // Get text up to the position
+                const textBefore = textarea.value.substring(0, position);
+                
+                // Create a span for the position
+                mirror.innerHTML = escapeHTML(textBefore) + '<span id="position"></span>';
+                document.body.appendChild(mirror);
+                
+                // Get the coordinates
+                const positionEl = mirror.querySelector('#position');
+                const rect = positionEl.getBoundingClientRect();
+                const textareaRect = textarea.getBoundingClientRect();
+                
+                document.body.removeChild(mirror);
+                
+                return {
+                    left: rect.left - textareaRect.left + textarea.scrollLeft,
+                    top: rect.top - textareaRect.top + textarea.scrollTop,
+                    height: parseInt(getComputedStyle(textarea).lineHeight)
+                };
+            }
+            
+            // Helper to escape HTML
+            function escapeHTML(html) {
+                return html.replace(/&/g, '&amp;')
+                           .replace(/</g, '&lt;')
+                           .replace(/>/g, '&gt;')
+                           .replace(/"/g, '&quot;')
+                           .replace(/'/g, '&#039;')
+                           .replace(/ /g, '&nbsp;')
+                           .replace(/\n/g, '<br>');
+            }
+            
+            // Define validation function
+            function validateJson(showStatus = false) {
+                console.log("Validating JSON");
+                
+                // Clear any existing error highlights
+                clearErrorHighlights();
+                
+                try {
+                    if (!inputJson.value.trim()) {
+                        outputJson.textContent = '';
+                        if (showStatus) {
+                            status.className = 'status';
+                            status.textContent = '';
+                        }
+                        return;
+                    }
+                    
+                    // Try to parse, if it fails try some fixes
+                    try {
+                        JSON.parse(inputJson.value);
+                        console.log("Initial parse succeeded");
+                        
+                        // If parsing succeeded without fixes, just format and display
+                        const parsedJson = JSON.parse(inputJson.value);
+                        const formattedJson = JSON.stringify(parsedJson, null, 2);
+                        outputJson.textContent = formattedJson;
+                        
+                        // Show success message only if requested
+                        if (showStatus) {
+                            status.className = 'status success';
+                            status.textContent = 'JSON is valid!';
+                        }
+                        return;
+                    } catch (parseError) {
+                        // Highlight the error position in the original input
+                        highlightError(parseError);
+                        
+                        console.log("Initial parse failed, attempting fixes:", parseError.message);
+                        
+                        // Continue with fixes as before
+                        let jsonText = inputJson.value;
+                        
+                        // Apply pre-processing for structural fixes
+                        jsonText = preProcessJson(jsonText);
+                        
+                        // Fix missing quotes around property names
+                        jsonText = jsonText.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":');
+                        
+                        // Fix single quotes to double quotes
+                        jsonText = jsonText.replace(/'/g, '"');
+                        
+                        // Fix trailing commas in objects and arrays
+                        jsonText = jsonText.replace(/,\s*([\]}])/g, '$1');
+                        
+                        // Add missing quotes to values that look like they should be strings
+                        jsonText = jsonText.replace(/:\s*([a-zA-Z][a-zA-Z0-9_]*)/g, ':"$1"');
+                        
+                        // Fix unquoted values following a comma (for arrays of identifiers)
+                        jsonText = jsonText.replace(/,\s*([a-zA-Z][a-zA-Z0-9_]*)/g, ',"$1"');
+                        
+                        // Try to parse with the fixes
+                        try {
+                            const parsedJson = JSON.parse(jsonText);
+                            const formattedJson = JSON.stringify(parsedJson, null, 2);
+                            outputJson.textContent = formattedJson;
+                            if (showStatus) {
+                                status.className = 'status success';
+                                status.textContent = 'JSON was fixed and is now valid!';
+                            }
+                            return;
+                        } catch (fixError) {
+                            // If fixes didn't work, try aggressive recovery and highlight the original error
+                            tryToFixAndDisplayJson(inputJson.value);
+                            
+                            if (showStatus) {
+                                console.log("JSON validation failed:", parseError.message);
+                                status.className = 'status error';
+                                status.textContent = 'Error: ' + parseError.message;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Validation failed:", error);
+                    tryToFixAndDisplayJson(inputJson.value);
+                    
+                    if (showStatus) {
+                        status.className = 'status error';
+                        status.textContent = 'Error: ' + error.message;
+                    }
+                }
+            }
+            
+            // Create debounced version of validateJson
+            const debouncedValidateJson = debounce(() => validateJson(false), 100);
+            
+            // Copy output to clipboard
+            if (copyOutput) {
+                copyOutput.addEventListener('click', function() {
+                    navigator.clipboard.writeText(outputJson.textContent);
+                    showCopyTooltip(copyOutput);
+                });
+            }
+            
+            function showCopyTooltip(button) {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 1500);
+            }
+            
+            // Tab key in textarea
+            if (inputJson) {
+                inputJson.addEventListener('keydown', function(e) {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const start = this.selectionStart;
+                        const end = this.selectionEnd;
+                        
+                        // Set new textarea value with tab
+                        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+                        
+                        // Put cursor back where it was
+                        this.selectionStart = this.selectionEnd = start + 2;
+                    }
+                });
+            }
+            
+            // Remove the buttons container
+            const actionsDiv = document.querySelector('.actions');
+            if (actionsDiv) {
+                actionsDiv.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
